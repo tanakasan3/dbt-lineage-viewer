@@ -5,12 +5,24 @@ Interactive DBT lineage explorer with search and filtering. Parses `manifest.jso
 ## Installation
 
 ```bash
-pip install dbt-lineage-viewer
+pip install git+https://github.com/tanakasan3/dbt-lineage-viewer.git
 ```
 
-Or from source:
+Or for development:
 
 ```bash
+git clone https://github.com/tanakasan3/dbt-lineage-viewer.git
+cd dbt-lineage-viewer
+
+# Option 1: Makefile (creates venv automatically)
+make dev
+source .venv/bin/activate
+
+# Option 2: pipx (isolated install)
+make install-pipx
+
+# Option 3: Manual venv
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
 
