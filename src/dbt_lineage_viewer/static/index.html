@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DBT Lineage Viewer</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+    <script src="https://unpkg.com/elkjs@0.9.2/lib/elk.bundled.js"></script>
+    <script src="https://unpkg.com/cytoscape-elk@2.2.0/dist/cytoscape-elk.js"></script>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>🔗 DBT Lineage</h1>
+            <div class="controls">
+                <input type="text" id="search" placeholder="Search models..." autocomplete="off">
+                <div class="depth-control">
+                    <label for="depth">Depth:</label>
+                    <input type="range" id="depth" min="1" max="10" value="5">
+                    <span id="depth-value">5</span>
+                </div>
+                <button id="reset-view" title="Reset view">⟲ Reset</button>
+                <button id="reload" title="Reload manifest">↻ Reload</button>
+            </div>
+            <div id="metadata"></div>
+        </header>
+        
+        <main>
+            <div id="cy"></div>
+            
+            <aside id="panel" class="hidden">
+                <button id="close-panel" class="close-btn">×</button>
+                <div id="panel-content"></div>
+            </aside>
+        </main>
+        
+        <footer>
+            <div id="legend">
+                <span class="legend-item"><span class="dot source"></span>Source</span>
+                <span class="legend-item"><span class="dot seed"></span>Seed</span>
+                <span class="legend-item"><span class="dot staging"></span>Staging</span>
+                <span class="legend-item"><span class="dot intermediate"></span>Intermediate</span>
+                <span class="legend-item"><span class="dot mart"></span>Mart</span>
+                <span class="legend-item"><span class="dot output"></span>Output</span>
+                <span class="legend-item"><span class="dot model"></span>Model</span>
+                <span class="legend-item"><span class="dot exposure"></span>Exposure</span>
+            </div>
+            <div id="status"></div>
+        </footer>
+    </div>
+    
+    <script src="/app.js"></script>
+</body>
+</html>

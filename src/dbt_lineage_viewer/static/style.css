@@ -1,0 +1,318 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --text-primary: #e8e8e8;
+    --text-secondary: #a0a0a0;
+    --accent: #e94560;
+    --accent-dim: #533a5c;
+    
+    --source: #4ade80;
+    --seed: #a78bfa;
+    --staging: #60a5fa;
+    --intermediate: #fbbf24;
+    --mart: #f472b6;
+    --output: #f87171;
+    --model: #94a3b8;
+    --exposure: #2dd4bf;
+    --static: #c084fc;
+    --snapshot: #fb923c;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+header {
+    background: var(--bg-secondary);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    border-bottom: 1px solid var(--bg-tertiary);
+    flex-wrap: wrap;
+}
+
+header h1 {
+    font-size: 1.3em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+#search {
+    padding: 8px 14px;
+    border: 1px solid var(--bg-tertiary);
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 14px;
+    width: 260px;
+}
+
+#search:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.depth-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+#depth {
+    width: 80px;
+    accent-color: var(--accent);
+}
+
+#depth-value {
+    min-width: 20px;
+    text-align: center;
+}
+
+button {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.2s;
+}
+
+button:hover {
+    background: var(--accent);
+}
+
+#metadata {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-left: auto;
+}
+
+main {
+    flex: 1;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+}
+
+#cy {
+    flex: 1;
+    background: var(--bg-primary);
+}
+
+#panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 420px;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--bg-tertiary);
+    overflow-y: auto;
+    transition: transform 0.2s ease;
+    z-index: 100;
+}
+
+#panel.hidden {
+    transform: translateX(100%);
+}
+
+.close-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 18px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#panel-content {
+    padding: 20px;
+}
+
+#panel-content h2 {
+    font-size: 1.1em;
+    margin-bottom: 16px;
+    padding-right: 30px;
+    word-break: break-word;
+}
+
+#panel-content .meta {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    font-size: 13px;
+    margin-bottom: 20px;
+}
+
+#panel-content .meta dt {
+    color: var(--text-secondary);
+}
+
+#panel-content .meta dd {
+    word-break: break-word;
+}
+
+#panel-content .section {
+    margin-bottom: 20px;
+}
+
+#panel-content .section h3 {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+#panel-content pre {
+    background: var(--bg-primary);
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.5;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+#panel-content code {
+    font-family: 'SF Mono', Consolas, monospace;
+}
+
+#panel-content .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    font-size: 11px;
+    margin-right: 4px;
+    margin-bottom: 4px;
+}
+
+#panel-content .type-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.type-badge.source { background: var(--source); color: #000; }
+.type-badge.seed { background: var(--seed); color: #000; }
+.type-badge.staging { background: var(--staging); color: #000; }
+.type-badge.intermediate { background: var(--intermediate); color: #000; }
+.type-badge.mart { background: var(--mart); color: #000; }
+.type-badge.output { background: var(--output); color: #000; }
+.type-badge.model { background: var(--model); color: #000; }
+.type-badge.exposure { background: var(--exposure); color: #000; }
+.type-badge.static { background: var(--static); color: #000; }
+.type-badge.snapshot { background: var(--snapshot); color: #000; }
+
+.lineage-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.lineage-link {
+    font-size: 12px;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 2px 6px;
+    background: var(--bg-primary);
+    border-radius: 3px;
+}
+
+.lineage-link:hover {
+    background: var(--accent);
+    color: white;
+}
+
+footer {
+    background: var(--bg-secondary);
+    padding: 8px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--bg-tertiary);
+    font-size: 12px;
+}
+
+#legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-secondary);
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.dot.source { background: var(--source); }
+.dot.seed { background: var(--seed); }
+.dot.staging { background: var(--staging); }
+.dot.intermediate { background: var(--intermediate); }
+.dot.mart { background: var(--mart); }
+.dot.output { background: var(--output); }
+.dot.model { background: var(--model); }
+.dot.exposure { background: var(--exposure); }
+
+#status {
+    color: var(--text-secondary);
+}
+
+/* Loading state */
+.loading #cy::after {
+    content: 'Loading...';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 18px;
+    color: var(--text-secondary);
+}
