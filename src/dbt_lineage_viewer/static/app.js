@@ -143,6 +143,31 @@ function initCytoscape(graph) {
                     'display': 'none',
                 }
             },
+            // Column source highlighting
+            {
+                selector: 'node.column-highlighted',
+                style: {
+                    'border-width': 4,
+                    'border-color': '#22d3ee',
+                    'border-style': 'double',
+                }
+            },
+            {
+                selector: 'node.column-source',
+                style: {
+                    'border-width': 3,
+                    'border-color': '#a78bfa',
+                }
+            },
+            {
+                selector: 'edge.column-highlighted',
+                style: {
+                    'width': 3,
+                    'line-color': '#a78bfa',
+                    'line-style': 'dashed',
+                    'target-arrow-color': '#a78bfa',
+                }
+            },
         ],
         
         // Layout will be applied after
@@ -289,19 +314,42 @@ function showNodePanel(node, lineage) {
         `;
     }
     
-    // Columns section
+    // Columns section - either from manifest or parsed from SQL
     let columnsSection = '';
-    if (node.columns && node.columns.length > 0) {
+    const hasManifestColumns = node.columns && node.columns.length > 0;
+    const hasSql = node.compiledCode || node.rawCode;
+    
+    if (hasManifestColumns) {
         const columnsList = node.columns.map(c => 
-            `<li><strong>${c.name}</strong>${c.dataType ? ` (${c.dataType})` : ''}${c.description ? `: ${c.description}` : ''}</li>`
+            `<li class="column-item" data-column="${escapeHtml(c.name)}">
+                <strong>${c.name}</strong>${c.dataType ? ` (${c.dataType})` : ''}${c.description ? `: ${c.description}` : ''}
+            </li>`
         ).join('');
         columnsSection = `
             <div class="section">
+                <h3>Columns <span class="column-hint">(click to trace)</span></h3>
+                <ul class="columns-list">${columnsList}</ul>
+            </div>
+        `;
+    } else if (hasSql) {
+        // Show "Analyze Columns" button
+        columnsSection = `
+            <div class="section">
                 <h3>Columns</h3>
-                <ul style="font-size: 12px; padding-left: 18px;">${columnsList}</ul>
+                <button id="analyze-columns" class="analyze-btn">🔍 Analyze SQL for Columns</button>
+                <div id="parsed-columns"></div>
             </div>
         `;
     }
+    
+    // Column lineage panel (hidden by default)
+    const columnLineageSection = `
+        <div id="column-lineage-section" class="section hidden">
+            <h3>🔗 Column Lineage: <span id="traced-column-name"></span></h3>
+            <div id="column-lineage-content"></div>
+            <button id="close-column-lineage" class="close-lineage-btn">Close</button>
+        </div>
+    `;
     
     content.innerHTML = `
         <h2>${node.label}</h2>
@@ -327,6 +375,7 @@ function showNodePanel(node, lineage) {
         </div>
         
         ${columnsSection}
+        ${columnLineageSection}
         ${codeSection}
     `;
     
@@ -340,7 +389,203 @@ function showNodePanel(node, lineage) {
         });
     });
     
+    // Add click handlers for column items
+    content.querySelectorAll('.column-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const columnName = item.dataset.column;
+            traceColumnLineage(node.id, columnName);
+        });
+    });
+    
+    // Analyze columns button
+    const analyzeBtn = content.querySelector('#analyze-columns');
+    if (analyzeBtn) {
+        analyzeBtn.addEventListener('click', () => analyzeColumns(node.id));
+    }
+    
+    // Close column lineage button
+    const closeLineageBtn = content.querySelector('#close-column-lineage');
+    if (closeLineageBtn) {
+        closeLineageBtn.addEventListener('click', () => {
+            document.getElementById('column-lineage-section').classList.add('hidden');
+            // Clear column highlighting
+            cy.elements().removeClass('column-highlighted column-source');
+        });
+    }
+    
     panel.classList.remove('hidden');
+}
+
+/**
+ * Analyze columns from SQL
+ */
+async function analyzeColumns(nodeId) {
+    const container = document.getElementById('parsed-columns');
+    container.innerHTML = '<span style="color: #888;">Analyzing SQL...</span>';
+    
+    try {
+        const response = await fetch(`/api/column-lineage/${encodeURIComponent(nodeId)}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            container.innerHTML = `<span style="color: #f87171;">Error: ${data.error}</span>`;
+            return;
+        }
+        
+        const columns = Object.keys(data.columns);
+        if (columns.length === 0) {
+            container.innerHTML = '<span style="color: #888;">No columns detected</span>';
+            return;
+        }
+        
+        const columnsList = columns.map(col => {
+            const info = data.columns[col];
+            const sourceInfo = info.sources.length > 0 
+                ? `<span class="source-hint">← ${info.sources.map(s => `${s.table}.${s.column}`).join(', ')}</span>`
+                : '';
+            return `<li class="column-item" data-column="${escapeHtml(col)}">
+                <strong>${col}</strong>
+                ${info.isDerived ? ' <span class="derived-badge">derived</span>' : ''}
+                ${sourceInfo}
+            </li>`;
+        }).join('');
+        
+        container.innerHTML = `<ul class="columns-list">${columnsList}</ul>`;
+        
+        // Add click handlers
+        container.querySelectorAll('.column-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const columnName = item.dataset.column;
+                traceColumnLineage(nodeId, columnName);
+            });
+        });
+        
+    } catch (err) {
+        container.innerHTML = `<span style="color: #f87171;">Failed to analyze</span>`;
+        console.error('Failed to analyze columns:', err);
+    }
+}
+
+/**
+ * Trace column lineage upstream
+ */
+async function traceColumnLineage(nodeId, columnName) {
+    const section = document.getElementById('column-lineage-section');
+    const nameSpan = document.getElementById('traced-column-name');
+    const content = document.getElementById('column-lineage-content');
+    
+    section.classList.remove('hidden');
+    nameSpan.textContent = columnName;
+    content.innerHTML = '<span style="color: #888;">Tracing upstream...</span>';
+    
+    try {
+        const depth = parseInt(document.getElementById('depth').value);
+        const response = await fetch(
+            `/api/column-trace/${encodeURIComponent(nodeId)}/${encodeURIComponent(columnName)}?depth=${depth}`
+        );
+        const data = await response.json();
+        
+        if (data.error) {
+            content.innerHTML = `<span style="color: #f87171;">Error: ${data.error}</span>`;
+            return;
+        }
+        
+        // Show current lineage
+        let html = '';
+        
+        if (data.currentLineage) {
+            const curr = data.currentLineage;
+            if (curr.expression) {
+                html += `<div class="lineage-expr"><code>${escapeHtml(curr.expression)}</code></div>`;
+            }
+            if (curr.sources && curr.sources.length > 0) {
+                html += '<div class="direct-sources"><strong>Direct sources:</strong><ul>';
+                for (const src of curr.sources) {
+                    const modelLink = src.upstreamModel 
+                        ? `<span class="lineage-link" data-id="${src.upstreamModel}">${src.upstreamModel.split('.').pop()}</span>`
+                        : src.resolvedTable || src.table;
+                    html += `<li>${modelLink}.<strong>${src.column}</strong>`;
+                    if (src.transformation) {
+                        html += ` <span class="transform-badge">${src.transformation}</span>`;
+                    }
+                    html += '</li>';
+                }
+                html += '</ul></div>';
+            }
+        }
+        
+        // Show trace
+        if (data.trace && data.trace.length > 0) {
+            html += '<div class="upstream-trace"><strong>Upstream trace:</strong><ul>';
+            
+            // Group by model
+            const byModel = {};
+            for (const t of data.trace) {
+                const model = t.model;
+                if (!byModel[model]) byModel[model] = [];
+                byModel[model].push(t);
+            }
+            
+            for (const [model, cols] of Object.entries(byModel)) {
+                const modelName = model.split('.').pop();
+                html += `<li><span class="lineage-link" data-id="${model}">${modelName}</span>: `;
+                html += cols.map(c => `<strong>${c.column}</strong>`).join(', ');
+                html += '</li>';
+            }
+            
+            html += '</ul></div>';
+            
+            // Highlight upstream models in graph
+            highlightColumnSources(nodeId, data.trace);
+        } else {
+            html += '<div style="color: #888; margin-top: 8px;">No further upstream sources found</div>';
+        }
+        
+        content.innerHTML = html;
+        
+        // Add click handlers for model links
+        content.querySelectorAll('.lineage-link').forEach(link => {
+            link.addEventListener('click', () => {
+                const id = link.dataset.id;
+                selectNode(id);
+                cy.getElementById(id).select();
+                cy.center(cy.getElementById(id));
+            });
+        });
+        
+    } catch (err) {
+        content.innerHTML = `<span style="color: #f87171;">Failed to trace</span>`;
+        console.error('Failed to trace column:', err);
+    }
+}
+
+/**
+ * Highlight nodes that are sources for a column
+ */
+function highlightColumnSources(currentNodeId, trace) {
+    // Clear previous column highlighting
+    cy.elements().removeClass('column-highlighted column-source');
+    
+    // Mark current node
+    cy.getElementById(currentNodeId).addClass('column-highlighted');
+    
+    // Mark all source models
+    const sourceModels = new Set(trace.map(t => t.model));
+    for (const modelId of sourceModels) {
+        const node = cy.getElementById(modelId);
+        if (node.length > 0) {
+            node.addClass('column-source');
+        }
+    }
+    
+    // Highlight edges between them
+    cy.edges().forEach(edge => {
+        const srcInTrace = sourceModels.has(edge.source().id()) || edge.source().id() === currentNodeId;
+        const tgtInTrace = sourceModels.has(edge.target().id()) || edge.target().id() === currentNodeId;
+        if (srcInTrace && tgtInTrace) {
+            edge.addClass('column-highlighted');
+        }
+    });
 }
 
 /**

@@ -316,3 +316,128 @@ footer {
     font-size: 18px;
     color: var(--text-secondary);
 }
+
+/* Column lineage styles */
+.columns-list {
+    list-style: none;
+    font-size: 12px;
+    padding: 0;
+}
+
+.column-item {
+    padding: 6px 10px;
+    margin: 2px 0;
+    background: var(--bg-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s, border-left 0.15s;
+    border-left: 3px solid transparent;
+}
+
+.column-item:hover {
+    background: var(--bg-tertiary);
+    border-left-color: var(--accent);
+}
+
+.column-hint {
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-weight: normal;
+    text-transform: none;
+}
+
+.source-hint {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-left: 8px;
+}
+
+.derived-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    background: var(--intermediate);
+    color: #000;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+.transform-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    background: var(--staging);
+    color: #000;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+.analyze-btn {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    background: var(--bg-tertiary);
+    border: 1px dashed var(--text-secondary);
+}
+
+.analyze-btn:hover {
+    border-style: solid;
+    border-color: var(--accent);
+}
+
+#column-lineage-section {
+    background: var(--bg-primary);
+    border-radius: 6px;
+    padding: 14px;
+    border: 1px solid var(--accent);
+}
+
+#column-lineage-section h3 {
+    color: var(--accent) !important;
+    margin-bottom: 12px !important;
+}
+
+#traced-column-name {
+    color: var(--text-primary);
+    font-family: 'SF Mono', Consolas, monospace;
+}
+
+.lineage-expr {
+    background: var(--bg-secondary);
+    padding: 8px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    font-size: 11px;
+    overflow-x: auto;
+}
+
+.lineage-expr code {
+    color: var(--intermediate);
+}
+
+.direct-sources, .upstream-trace {
+    margin-bottom: 10px;
+}
+
+.direct-sources ul, .upstream-trace ul {
+    list-style: none;
+    padding-left: 12px;
+    margin-top: 6px;
+}
+
+.direct-sources li, .upstream-trace li {
+    padding: 4px 0;
+    font-size: 12px;
+}
+
+.close-lineage-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 6px;
+    font-size: 11px;
+    background: transparent;
+    border: 1px solid var(--text-secondary);
+}
+
+.close-lineage-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}

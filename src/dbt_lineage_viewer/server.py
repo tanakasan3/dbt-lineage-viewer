@@ -4,11 +4,12 @@ import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .parser import parse_manifest
+from .column_lineage import analyze_model_columns, trace_column_upstream
 
 # Will be set by CLI or env var
 _graph_data: dict[str, Any] | None = None
@@ -166,3 +167,119 @@ async def reload_manifest() -> dict[str, Any]:
         "status": "reloaded",
         "metadata": _graph_data["metadata"],
     }
+
+
+@app.get("/api/column-lineage/{node_id:path}")
+async def get_column_lineage(
+    node_id: str,
+    dialect: str = Query(default="postgres", description="SQL dialect")
+) -> dict[str, Any]:
+    """
+    Extract column-level lineage for a model by parsing its SQL.
+    
+    Returns mapping of output columns to their source columns/tables.
+    """
+    if _graph_data is None:
+        raise HTTPException(status_code=500, detail="Graph not initialized")
+    
+    # Find the node
+    node_data = None
+    for node in _graph_data["nodes"]:
+        if node["data"]["id"] == node_id:
+            node_data = node["data"]
+            break
+    
+    if not node_data:
+        raise HTTPException(status_code=404, detail=f"Node {node_id} not found")
+    
+    # Get compiled SQL
+    compiled_sql = node_data.get("compiledCode") or node_data.get("rawCode")
+    if not compiled_sql:
+        return {"columns": {}, "error": "No SQL found for this node"}
+    
+    # Get upstream models for resolution
+    upstream_models = []
+    for edge in _graph_data["edges"]:
+        if edge["data"]["target"] == node_id:
+            upstream_models.append(edge["data"]["source"])
+    
+    try:
+        lineage = analyze_model_columns(compiled_sql, upstream_models, dialect)
+        return {"columns": lineage, "nodeId": node_id}
+    except Exception as e:
+        return {"columns": {}, "error": str(e), "nodeId": node_id}
+
+
+@app.get("/api/column-trace/{node_id:path}/{column_name}")
+async def trace_column(
+    node_id: str,
+    column_name: str,
+    depth: int = Query(default=5, ge=1, le=20, description="Max depth to trace"),
+    dialect: str = Query(default="postgres", description="SQL dialect")
+) -> dict[str, Any]:
+    """
+    Trace a column upstream through the lineage graph.
+    
+    Returns the chain of upstream models and columns that feed into this column.
+    """
+    if _graph_data is None:
+        raise HTTPException(status_code=500, detail="Graph not initialized")
+    
+    # Find the node
+    node_data = None
+    for node in _graph_data["nodes"]:
+        if node["data"]["id"] == node_id:
+            node_data = node["data"]
+            break
+    
+    if not node_data:
+        raise HTTPException(status_code=404, detail=f"Node {node_id} not found")
+    
+    # Get compiled SQL
+    compiled_sql = node_data.get("compiledCode") or node_data.get("rawCode")
+    if not compiled_sql:
+        return {"trace": [], "error": "No SQL found for this node"}
+    
+    # Build dict of all models with their SQL
+    all_models = {}
+    for node in _graph_data["nodes"]:
+        nid = node["data"]["id"]
+        sql = node["data"].get("compiledCode") or node["data"].get("rawCode")
+        
+        # Get depends_on for this node
+        deps = []
+        for edge in _graph_data["edges"]:
+            if edge["data"]["target"] == nid:
+                deps.append(edge["data"]["source"])
+        
+        all_models[nid] = {
+            "compiledCode": sql,
+            "rawCode": node["data"].get("rawCode"),
+            "depends_on": deps,
+        }
+    
+    # Get upstream models for initial resolution
+    upstream_models = all_models.get(node_id, {}).get("depends_on", [])
+    
+    try:
+        # First get lineage for the current model
+        current_lineage = analyze_model_columns(compiled_sql, upstream_models, dialect)
+        
+        # Then trace upstream
+        trace = trace_column_upstream(
+            column_name,
+            current_lineage,
+            all_models,
+            visited=None,
+            max_depth=depth,
+            dialect=dialect
+        )
+        
+        return {
+            "nodeId": node_id,
+            "column": column_name,
+            "currentLineage": current_lineage.get(column_name),
+            "trace": trace,
+        }
+    except Exception as e:
+        return {"trace": [], "error": str(e), "nodeId": node_id, "column": column_name}

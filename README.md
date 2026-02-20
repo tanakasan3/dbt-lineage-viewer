@@ -75,6 +75,21 @@ dbt-lineage serve . --no-open
 - **Layer Coloring**: Sources (green), staging (blue), intermediate (yellow), outputs (red)
 - **SQL Preview**: Click a node to view its SQL and metadata
 - **ELK Layout**: Hierarchical left-to-right layout for clear lineage flow
+- **Column Lineage**: Click columns to trace their upstream sources through SQL parsing
+
+### Column-Level Lineage
+
+When you select a model, you can:
+
+1. **View columns**: If documented in manifest, columns are shown in the panel
+2. **Analyze SQL**: Click "Analyze SQL for Columns" to parse the SQL and extract column definitions
+3. **Trace upstream**: Click any column to see which upstream tables/columns it derives from
+
+The column tracer uses [sqlglot](https://github.com/tobymao/sqlglot) to parse SQL and extract:
+- Direct column references (`customer_id` → `stg_orders.customer_id`)
+- Transformations (`SUM(amount)` → derived from `amount`)
+- Multi-table joins (resolves table aliases)
+- Upstream chain (traces through multiple models)
 
 ## How It Works
 

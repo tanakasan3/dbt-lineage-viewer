@@ -29,6 +29,7 @@ dependencies = [
     "fastapi>=0.100.0",
     "uvicorn[standard]>=0.20.0",
     "rich>=13.0",
+    "sqlglot>=20.0.0",
 ]
 
 [project.scripts]
