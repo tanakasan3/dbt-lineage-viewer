@@ -242,6 +242,10 @@ def _analyze_select_expression(
         elif len(table_aliases) == 1:
             # If only one table, assume it's from there
             resolved_table = list(table_aliases.values())[0]
+        elif len(table_aliases) > 1:
+            # Multiple tables - mark as ambiguous but include all possible sources
+            # This will be resolved later when matching against upstream models
+            resolved_table = None  # Will try to resolve via upstream model matching
         
         transformation = ", ".join(sorted(transformations)) if transformations else None
         
@@ -272,7 +276,7 @@ def _analyze_select_expression(
 def analyze_model_columns(
     compiled_sql: str,
     upstream_models: list[str],
-    dialect: str = "postgres"
+    dialect: str | None = None
 ) -> dict[str, Any]:
     """
     Analyze a model's SQL to extract column lineage with upstream model resolution.
@@ -287,29 +291,53 @@ def analyze_model_columns(
     """
     lineage = extract_column_lineage(compiled_sql, dialect)
     
+    # Build a lookup of short names to full model IDs
+    model_lookup = {}
+    for model in upstream_models:
+        model_short = model.split(".")[-1].lower()
+        model_lookup[model_short] = model
+    
     # Convert to API-friendly format
     result = {}
     for col_name, col_lineage in lineage.items():
         sources = []
         for src in col_lineage.sources:
-            # Try to match resolved table to upstream models
             matched_model = None
-            if src.resolved_table:
-                # Check if resolved table matches any upstream model
+            resolved = src.resolved_table
+            
+            if resolved:
+                # Direct match on resolved table
+                resolved_lower = resolved.lower()
+                if resolved_lower in model_lookup:
+                    matched_model = model_lookup[resolved_lower]
+                else:
+                    # Try partial match
+                    for model_short, model_full in model_lookup.items():
+                        if resolved_lower in model_short or model_short in resolved_lower:
+                            matched_model = model_full
+                            break
+            
+            # If no table alias (resolved_table is None), try to match by checking 
+            # all upstream models - assign to all possible sources
+            if not resolved and src.table == "?":
+                # Column without table qualifier - could come from any joined table
+                # For now, include all upstream models as potential sources
+                # The trace will resolve this by checking which model actually has the column
                 for model in upstream_models:
-                    model_short = model.split(".")[-1]  # Get just the model name
-                    if model_short.lower() == src.resolved_table.lower():
-                        matched_model = model
-                        break
-                    # Also check without stg_/int_ prefixes
-                    if src.resolved_table.lower() in model.lower():
-                        matched_model = model
-                        break
+                    sources.append({
+                        "table": src.table,
+                        "column": src.column,
+                        "resolvedTable": model.split(".")[-1],
+                        "upstreamModel": model,
+                        "transformation": src.transformation,
+                        "ambiguous": True,
+                    })
+                continue  # Skip the normal append below
             
             sources.append({
                 "table": src.table,
                 "column": src.column,
-                "resolvedTable": src.resolved_table,
+                "resolvedTable": resolved,
                 "upstreamModel": matched_model,
                 "transformation": src.transformation,
             })
@@ -330,7 +358,7 @@ def trace_column_upstream(
     all_models: dict[str, dict],  # node_id -> {compiledCode, depends_on, ...}
     visited: set[str] | None = None,
     max_depth: int = 10,
-    dialect: str = "postgres"
+    dialect: str | None = None
 ) -> list[dict]:
     """
     Trace a column upstream through multiple models.
@@ -361,13 +389,31 @@ def trace_column_upstream(
     for source in col_info.get("sources", []):
         upstream_model = source.get("upstreamModel")
         source_column = source.get("column")
+        is_ambiguous = source.get("ambiguous", False)
         
-        if not upstream_model or not source_column:
+        if not source_column:
+            continue
+        
+        # If no upstream model but we have a column name, try to find it in any upstream
+        if not upstream_model and source_column:
+            # This shouldn't happen now with our ambiguous handling, but just in case
             continue
         
         visit_key = f"{upstream_model}:{source_column}"
         if visit_key in visited:
             continue
+        
+        # For ambiguous sources, verify the column exists in the upstream model
+        if is_ambiguous:
+            upstream_data = all_models.get(upstream_model, {})
+            upstream_sql = upstream_data.get("compiledCode") or upstream_data.get("rawCode")
+            if upstream_sql:
+                upstream_deps = upstream_data.get("depends_on", [])
+                upstream_lineage = analyze_model_columns(upstream_sql, upstream_deps, dialect)
+                # Check if this column is actually output by this model
+                if source_column not in upstream_lineage:
+                    continue  # Column not in this model, skip
+        
         visited.add(visit_key)
         
         result.append({
@@ -376,6 +422,7 @@ def trace_column_upstream(
             "table": source.get("table"),
             "transformation": source.get("transformation"),
             "depth": max_depth,
+            "ambiguous": is_ambiguous,
         })
         
         # Recursively trace upstream
