@@ -1,11 +1,60 @@
 """Extract column-level lineage from SQL using sqlglot."""
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
 import sqlglot
 from sqlglot import exp
 from sqlglot.optimizer.scope import build_scope
+
+
+def strip_jinja(sql: str) -> str:
+    """
+    Strip Jinja templates from SQL, replacing refs/sources with table names.
+    
+    Handles:
+    - {{ ref("model_name") }} -> model_name
+    - {{ ref('model_name') }} -> model_name
+    - {{ source("source", "table") }} -> source__table
+    - {{ config(...) }} -> (removed)
+    - {# comment #} -> (removed)
+    """
+    # Remove Jinja comments
+    sql = re.sub(r'\{#.*?#\}', '', sql, flags=re.DOTALL)
+    
+    # Remove config blocks
+    sql = re.sub(r'\{\{\s*config\s*\([^)]*\)\s*\}\}', '', sql, flags=re.DOTALL)
+    
+    # Replace ref() with the model name
+    # Handles: {{ ref("name") }}, {{ ref('name') }}, {{ ref("name", v=1) }}
+    def replace_ref(match):
+        content = match.group(1)
+        # Extract first string argument
+        str_match = re.search(r'''["']([^"']+)["']''', content)
+        if str_match:
+            return str_match.group(1)
+        return 'unknown_ref'
+    
+    sql = re.sub(r'\{\{\s*ref\s*\(([^)]+)\)\s*\}\}', replace_ref, sql)
+    
+    # Replace source() with source__table
+    def replace_source(match):
+        content = match.group(1)
+        # Extract both string arguments
+        strings = re.findall(r'''["']([^"']+)["']''', content)
+        if len(strings) >= 2:
+            return f"{strings[0]}__{strings[1]}"
+        elif len(strings) == 1:
+            return strings[0]
+        return 'unknown_source'
+    
+    sql = re.sub(r'\{\{\s*source\s*\(([^)]+)\)\s*\}\}', replace_source, sql)
+    
+    # Remove any remaining {{ ... }} blocks
+    sql = re.sub(r'\{\{[^}]*\}\}', '', sql)
+    
+    return sql
 
 
 @dataclass
@@ -34,12 +83,15 @@ def extract_column_lineage(
     Parse SQL and extract column-level lineage.
     
     Args:
-        sql: The compiled SQL to parse
+        sql: The compiled SQL to parse (may contain Jinja)
         dialect: SQL dialect (postgres, bigquery, snowflake, etc.)
     
     Returns:
         Dict mapping output column names to their lineage info
     """
+    # Strip Jinja templates first
+    sql = strip_jinja(sql)
+    
     try:
         parsed = sqlglot.parse_one(sql, dialect=dialect)
     except Exception:
