@@ -314,30 +314,15 @@ function showNodePanel(node, lineage) {
         `;
     }
     
-    // Columns section - either from manifest or parsed from SQL
+    // Columns section - always analyze from SQL (manifest columns are often incomplete)
     let columnsSection = '';
-    const hasManifestColumns = node.columns && node.columns.length > 0;
     const hasSql = node.compiledCode || node.rawCode;
     
-    if (hasManifestColumns) {
-        const columnsList = node.columns.map(c => 
-            `<li class="column-item" data-column="${escapeHtml(c.name)}">
-                <strong>${c.name}</strong>${c.dataType ? ` (${c.dataType})` : ''}${c.description ? `: ${c.description}` : ''}
-            </li>`
-        ).join('');
+    if (hasSql) {
         columnsSection = `
             <div class="section">
                 <h3>Columns <span class="column-hint">(click to trace)</span></h3>
-                <ul class="columns-list">${columnsList}</ul>
-            </div>
-        `;
-    } else if (hasSql) {
-        // Show "Analyze Columns" button
-        columnsSection = `
-            <div class="section">
-                <h3>Columns</h3>
-                <button id="analyze-columns" class="analyze-btn">🔍 Analyze SQL for Columns</button>
-                <div id="parsed-columns"></div>
+                <div id="parsed-columns"><span style="color: #888;">Loading...</span></div>
             </div>
         `;
     }
@@ -389,18 +374,9 @@ function showNodePanel(node, lineage) {
         });
     });
     
-    // Add click handlers for column items
-    content.querySelectorAll('.column-item').forEach(item => {
-        item.addEventListener('click', () => {
-            const columnName = item.dataset.column;
-            traceColumnLineage(node.id, columnName);
-        });
-    });
-    
-    // Analyze columns button
-    const analyzeBtn = content.querySelector('#analyze-columns');
-    if (analyzeBtn) {
-        analyzeBtn.addEventListener('click', () => analyzeColumns(node.id));
+    // Auto-analyze columns if SQL is available
+    if (hasSql) {
+        analyzeColumns(node.id);
     }
     
     // Close column lineage button
