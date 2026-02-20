@@ -75,9 +75,33 @@ class ColumnLineage:
     is_derived: bool = False  # True if computed (not direct reference)
 
 
+def detect_dialect(sql: str) -> str:
+    """
+    Auto-detect SQL dialect from syntax hints.
+    
+    Returns dialect name for sqlglot.
+    """
+    # BigQuery indicators
+    if '`' in sql:  # Backtick quoting
+        return "bigquery"
+    if "SAFE_OFFSET" in sql.upper() or "SAFE_DIVIDE" in sql.upper():
+        return "bigquery"
+    if "STRUCT<" in sql.upper() or "ARRAY<" in sql.upper():
+        return "bigquery"
+    
+    # Snowflake indicators
+    if "FLATTEN(" in sql.upper():
+        return "snowflake"
+    if "$$" in sql:  # Dollar quoting often in Snowflake
+        return "snowflake"
+    
+    # Default to postgres (most compatible)
+    return "postgres"
+
+
 def extract_column_lineage(
     sql: str,
-    dialect: str = "postgres"
+    dialect: str | None = None
 ) -> dict[str, ColumnLineage]:
     """
     Parse SQL and extract column-level lineage.
@@ -85,6 +109,7 @@ def extract_column_lineage(
     Args:
         sql: The compiled SQL to parse (may contain Jinja)
         dialect: SQL dialect (postgres, bigquery, snowflake, etc.)
+                 If None, auto-detects from SQL syntax.
     
     Returns:
         Dict mapping output column names to their lineage info
@@ -92,11 +117,21 @@ def extract_column_lineage(
     # Strip Jinja templates first
     sql = strip_jinja(sql)
     
+    # Auto-detect dialect if not specified
+    if dialect is None:
+        dialect = detect_dialect(sql)
+    
     try:
         parsed = sqlglot.parse_one(sql, dialect=dialect)
     except Exception:
-        # If parsing fails, return empty
-        return {}
+        # If parsing fails with detected dialect, try postgres as fallback
+        if dialect != "postgres":
+            try:
+                parsed = sqlglot.parse_one(sql, dialect="postgres")
+            except Exception:
+                return {}
+        else:
+            return {}
     
     if not isinstance(parsed, exp.Select):
         # Handle CTEs - get the final SELECT

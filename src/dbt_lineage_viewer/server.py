@@ -172,7 +172,7 @@ async def reload_manifest() -> dict[str, Any]:
 @app.get("/api/column-lineage/{node_id:path}")
 async def get_column_lineage(
     node_id: str,
-    dialect: str = Query(default="postgres", description="SQL dialect")
+    dialect: str | None = Query(default=None, description="SQL dialect (auto-detects if not specified)")
 ) -> dict[str, Any]:
     """
     Extract column-level lineage for a model by parsing its SQL.
@@ -215,7 +215,7 @@ async def trace_column(
     node_id: str,
     column_name: str,
     depth: int = Query(default=5, ge=1, le=20, description="Max depth to trace"),
-    dialect: str = Query(default="postgres", description="SQL dialect")
+    dialect: str | None = Query(default=None, description="SQL dialect (auto-detects if not specified)")
 ) -> dict[str, Any]:
     """
     Trace a column upstream through the lineage graph.
